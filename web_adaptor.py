@@ -32,7 +32,7 @@ HTML_CONVERSOR = '''
         input[type="text"]:focus { border-color: #00a896; outline: none; }
         button { padding: 12px 25px; background-color: #00a896; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; }
         button:hover { background-color: #028090; }
-        .status { margin-top: 20px; font-weight: bold; color: #028090; min-height: 20px; }
+        .status { margin-top: 20px; font-weight: bold; color: #028090; min-height: 20px; word-break: break-word; }
         .error { color: #e63946; }
     </style>
 </head>
@@ -66,8 +66,19 @@ HTML_CONVERSOR = '''
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: urlInput })
             })
-            .then(res => {
-                if (!res.ok) return res.json().then(err => { throw new Error(err.error || "Error en el servidor"); });
+            .then(async res => {
+                if (!res.ok) {
+                    // Si no es OK, verificamos si vino un JSON o una página de error HTML
+                    const contentType = res.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        const errJson = await res.json();
+                        throw new Error(errJson.error || "Error en el servidor");
+                    } else {
+                        const errText = await res.text();
+                        // Extraemos un resumen si es un HTML largo para no romper la vista
+                        throw new Error("Error del Servidor: " + (errText.substring(0, 100) || "Error desconocido"));
+                    }
+                }
                 return res.blob();
             })
             .then(blob => {
@@ -94,6 +105,7 @@ HTML_CONVERSOR = '''
 </html>
 '''
 
+# El resto de las rutas (@app.route) quedan exactamente como estaban abajo...
 @app.route('/')
 def home():
     return render_template_string(HTML_CONVERSOR)
@@ -108,7 +120,6 @@ def convertir_api():
 
     try:
         conversor = textToAudio(url)
-        # Ejecutamos la descarga usando BeautifulSoup
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         import requests
         from bs4 import BeautifulSoup
