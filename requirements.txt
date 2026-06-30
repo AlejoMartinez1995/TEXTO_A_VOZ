@@ -1,5 +1,5 @@
 flask
 gunicorn
-gTTS==2.5.4
-newspaper3k==0.2.8
-lxml_html_clean
+gTTS
+beautifulsoup4
+requests

@@ -5,7 +5,6 @@ Conecta la interfaz web directamente con tu clase textToAudio.
 from flask import Flask, render_template_string, request, send_file, jsonify
 import importlib
 import io
-import os
 
 app = Flask(__name__)
 
@@ -14,7 +13,7 @@ NOMBRE_ARCHIVO_ORIGINAL = 'texto_a_voz'
 try:
     modulo_original = importlib.import_module(NOMBRE_ARCHIVO_ORIGINAL)
     textToAudio = getattr(modulo_original, 'textToAudio')
-except (ImportError, AttributeError) as e:
+except Exception as e:
     textToAudio = None
 
 HTML_CONVERSOR = '''
@@ -59,7 +58,7 @@ HTML_CONVERSOR = '''
             }
 
             statusDiv.className = "status";
-            statusDiv.innerText = "Descargando artículo y procesando voz (puede demorar unos segundos)...";
+            statusDiv.innerText = "Procesando artículo y generando MP3...";
             btn.disabled = true;
 
             fetch('/api/convertir', {
@@ -108,19 +107,20 @@ def convertir_api():
         return jsonify({"error": "No se pudo cargar el módulo lógico original."}), 500
 
     try:
-        # Instanciamos clase original pasándole la URL de la web
         conversor = textToAudio(url)
-        
-        # Ejecutamos tus métodos de descarga y parseo de newspaper + gTTS
-        conversor.article.download()
-        conversor.article.parse()
-        texto_extraido = conversor.article.text
-        
-        if not texto_extraido or not texto_extraido.strip():
-            return jsonify({"error": "No se pudo extraer texto de esta URL. Asegúrate de que sea un artículo válido."}), 400
-        
-        # Generamos el audio usando gtts
+        # Ejecutamos la descarga usando BeautifulSoup
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        import requests
+        from bs4 import BeautifulSoup
         from gtts import gTTS
+        
+        res = requests.get(conversor.url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        texto_extraido = "\n".join([p.get_text() for p in soup.find_all('p')])
+        
+        if not texto_extraido.strip():
+            return jsonify({"error": "No se pudo extraer suficiente texto de esta URL."}), 400
+        
         tts = gTTS(texto_extraido, lang='es')
         
         buffer_audio = io.BytesIO()
