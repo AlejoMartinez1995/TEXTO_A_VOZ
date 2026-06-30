@@ -119,20 +119,44 @@ def convertir_api():
         return jsonify({"error": "No se pudo cargar el módulo lógico original."}), 500
 
     try:
-        conversor = textToAudio(url)
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        # Decodificamos la URL por si viene con caracteres raros de formato web (%C3%AD, etc.)
+        import urllib.parse
+        url_limpia = urllib.parse.unquote(url)
+        
+        conversor = textToAudio(url_limpia)
+        
+        # Headers completos simulando un navegador real para que Wikipedia no tire error 500
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3'
+        }
+        
         import requests
         from bs4 import BeautifulSoup
         from gtts import gTTS
         
-        res = requests.get(conversor.url, headers=headers, timeout=10)
+        # Hacemos la petición de forma segura
+        res = requests.get(conversor.url, headers=headers, timeout=15)
+        res.raise_for_status() # Si la web responde un error, salta directo al except
+        
+        # Forzamos la codificación correcta para que no rompa con acentos españoles
+        res.encoding = res.apparent_encoding
+        
         soup = BeautifulSoup(res.text, 'html.parser')
-        texto_extraido = "\n".join([p.get_text() for p in soup.find_all('p')])
         
-        if not texto_extraido.strip():
-            return jsonify({"error": "No se pudo extraer suficiente texto de esta URL."}), 400
+        # Extraemos solo el texto de los párrafos válidos
+        parrafos = [p.get_text().strip() for p in soup.find_all('p') if p.get_text().strip()]
+        texto_extraido = "\n".join(parrafos)
         
-        tts = gTTS(texto_extraido, lang='es')
+        if not texto_extraido:
+            return jsonify({"error": "No se pudo extraer suficiente texto limpio de esta URL."}), 400
+        
+        # Recortamos a los primeros 5000 caracteres para evitar que gTTS sature la memoria en Render gratis
+        texto_recortado = texto_extraido[:5000]
+        
+        # Generamos el audio en memoria RAM
+        tts = gTTS(texto_recortado, lang='es')
         
         buffer_audio = io.BytesIO()
         tts.write_to_fp(buffer_audio)
@@ -145,8 +169,10 @@ def convertir_api():
             download_name='audio_articulo.mp3'
         )
 
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Error al descargar la página web: {str(e)}"}), 400
     except Exception as e:
-        return jsonify({"error": f"Error al procesar: {str(e)}"}), 500
-
+        return jsonify({"error": f"Error interno del procesador de voz: {str(e)}"}), 500
+    
 if __name__ == '__main__':
     app.run(debug=True)
