@@ -76,14 +76,10 @@ class ConversorApp:
             messagebox.showerror("Error", f"Ocurrió un problema:\n{str(e)}")
         
 
-
-
 if __name__ == "__main__":
-    # Inicializamos la ventana raíz de Tkinter
+    import tkinter as tk
+    from tkinter import messagebox
+    
     root_ventana = tk.Tk()
-    
-    # Se la pasamos a tu clase para que construya la app dentro de ella
     app = ConversorApp(root_ventana)
-    
-    # Mantiene la ventana abierta escuchando clicks y eventos
     root_ventana.mainloop()

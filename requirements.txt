@@ -1,0 +1,4 @@
+flask
+gunicorn
+gTTS
+newspaper3k
